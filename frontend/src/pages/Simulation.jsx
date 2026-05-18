@@ -1,27 +1,40 @@
 import { useState } from "react";
 import api from "../api/api";
 import SimulationPanel from "../components/SimulationPanel";
+
 function Simulation() {
-    const [message, setMessage] = useState("");
+    const [result, setResult] = useState(null);
+    const [loading, setLoading] = useState(false);
+
     const runSimulation = async () => {
-        const response = await api.post(
-            "/simulation/run"
-        );
-        setMessage(response.data);
+        setLoading(true);
+        try {
+            const response = await api.post("/simulation/run");
+            setResult(response.data);
+        } catch (error) {
+            console.error("Simulation failed:", error);
+            setResult({
+                scenario: "Error",
+                steps: ["Could not reach backend. Start the Spring Boot server on port 8080."],
+                deadlockPrevented: false
+            });
+        } finally {
+            setLoading(false);
+        }
     };
+
     return (
         <div>
-            <h1 className="page-title">
-                Concurrent Simulation
-            </h1>
-            <button
-                className="primary-btn"
-                onClick={runSimulation}
-            >
-                Run Simulation
-            </button>
-            <SimulationPanel message={message} />
-        </div >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px" }}>
+                <h1 className="page-title" style={{ marginBottom: 0 }}>
+                    Deadlock Prevention Scenario
+                </h1>
+                <button className="primary-btn" onClick={runSimulation} disabled={loading} style={{ marginBottom: 0 }}>
+                    {loading ? "Running..." : "Run Prevention Demo"}
+                </button>
+            </div>
+            <SimulationPanel result={result} />
+        </div>
     );
 }
 export default Simulation;

@@ -91,14 +91,18 @@ public class TransactionService {
         accountRepository.save(sender);
         accountRepository.save(receiver);
 
+        long existingCount = transactionRepository.count();
+        LocalDateTime startTime = LocalDateTime.now().plusSeconds(existingCount * 2L);
+        LocalDateTime endTime = startTime.plusSeconds(3L + (amount % 5));
+
         Transaction transaction = new Transaction();
         transaction.setAmount(dto.getAmount());
         transaction.setFromAccount(sender);
         transaction.setToAccount(receiver);
         transaction.setStatus(TransactionStatus.SUCCESS);
         transaction.setTransactionType(TransactionType.TRANSFER);
-        transaction.setStartTime(LocalDateTime.now());
-        transaction.setEndTime(LocalDateTime.now().plusSeconds(5));
+        transaction.setStartTime(startTime);
+        transaction.setEndTime(endTime);
 
         Transaction saved = transactionRepository.save(transaction);
 

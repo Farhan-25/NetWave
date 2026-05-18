@@ -1,5 +1,6 @@
 package com.example.bank_transaction_system.controller;
 
+import com.example.bank_transaction_system.dto.response.ScheduleResponseDto;
 import com.example.bank_transaction_system.entity.Transaction;
 import com.example.bank_transaction_system.service.ActivitySelectionService;
 import com.example.bank_transaction_system.service.TransactionService;
@@ -15,35 +16,20 @@ import java.util.List;
 @RequestMapping("/schedule")
 public class SchedulerController {
 
-    private final ActivitySelectionService
-            activitySelectionService;
-
-    private final TransactionService
-            transactionService;
+    private final ActivitySelectionService activitySelectionService;
+    private final TransactionService transactionService;
 
     public SchedulerController(
             ActivitySelectionService activitySelectionService,
             TransactionService transactionService
     ) {
-
-        this.activitySelectionService =
-                activitySelectionService;
-
-        this.transactionService =
-                transactionService;
+        this.activitySelectionService = activitySelectionService;
+        this.transactionService = transactionService;
     }
 
     @GetMapping
-    public List<Transaction>
-    scheduleTransactions() {
-
-        List<Transaction> transactions =
-                transactionService
-                        .getAllTransactions();
-
-        return activitySelectionService
-                .selectTransactions(
-                        transactions
-                );
+    public ScheduleResponseDto scheduleTransactions() {
+        List<Transaction> transactions = transactionService.getAllTransactions();
+        return activitySelectionService.buildScheduleResponse(transactions);
     }
 }

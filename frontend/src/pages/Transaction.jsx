@@ -4,100 +4,88 @@ import TransactionTable from "../components/TransactionTable";
 
 function Transactions() {
 
-    const [transactions, setTransactions] =
-        useState([]);
-
-    const [accounts, setAccounts] =
-        useState([]);
-
+    const [transactions, setTransactions] = useState([]);
+    const [accounts, setAccounts] = useState([]);
     const [toast, setToast] = useState(null);
-    const [localRejected, setLocalRejected] = useState([]);
+    const [lastResult, setLastResult] = useState(null);
 
-    const [formData, setFormData] =
-        useState({
-            fromAccountId: "",
-            toAccountId: "",
-            amount: ""
-        });
+    const [formData, setFormData] = useState({
+        fromAccountId: "",
+        toAccountId: "",
+        amount: ""
+    });
 
     useEffect(() => {
-
         fetchTransactions();
-
         fetchAccounts();
-
     }, []);
 
     const fetchTransactions = async () => {
-
-        const response =
-            await api.get("/transactions");
-
-        // Merge backend transactions with local rejected ones
-        const allTx = [...response.data, ...localRejected];
-        // Sort by ID or time if needed, but simple append is fine
-        setTransactions(allTx);
+        const response = await api.get("/transactions");
+        setTransactions((prev) => {
+            const rejected = prev.filter((tx) => String(tx.id).startsWith("REJECTED"));
+            return [...response.data, ...rejected];
+        });
     };
 
     const fetchAccounts = async () => {
-
-        const response =
-            await api.get("/accounts");
-
+        const response = await api.get("/accounts");
         setAccounts(response.data);
     };
 
     const handleChange = (event) => {
-
         setFormData({
             ...formData,
-            [event.target.name]:
-                event.target.value
+            [event.target.name]: event.target.value
         });
     };
 
-    const createTransaction = async (
-        event
-    ) => {
-
+    const createTransaction = async (event) => {
         event.preventDefault();
 
         try {
-
             const payload = {
                 fromAccountId: parseInt(formData.fromAccountId, 10),
                 toAccountId: parseInt(formData.toAccountId, 10),
                 amount: parseFloat(formData.amount)
             };
 
-            const response =
-                await api.post(
-                    "/transactions",
-                    payload
-                );
+            const response = await api.post("/transactions", payload);
+            setLastResult(response.data);
 
             if (response.data.safe) {
-                setToast({ text: "Transaction Approved", type: "success" });
+                setToast({
+                    text: `Transaction Approved — Safe sequence: ${(response.data.safeSequence || []).map((p) => "P" + p).join(" → ")}`,
+                    type: "success"
+                });
             } else {
-                setToast({ text: "Unsafe State Detected", type: "error" });
-                
-                // Backend doesn't save rejected transactions to DB. 
-                // We track them locally so they appear in the UI table as requested.
+                const suggestion = response.data.suggestedAmount;
+                const suggestionText = suggestion && suggestion > 0
+                    ? ` Suggested safe amount: ₹${suggestion} (reduce by ₹${payload.amount - suggestion}).`
+                    : " No safe amount found — try a smaller transfer.";
+                setToast({
+                    text: `Unsafe State Detected — Request rejected.${suggestionText}`,
+                    type: "error"
+                });
+
                 const rejectedTx = {
                     id: `REJECTED-${Date.now()}`,
-                    fromAccount: accounts.find(a => a.id === payload.fromAccountId),
-                    toAccount: accounts.find(a => a.id === payload.toAccountId),
+                    fromAccount: accounts.find((a) => a.id === payload.fromAccountId),
+                    toAccount: accounts.find((a) => a.id === payload.toAccountId),
                     amount: payload.amount,
                     status: "REJECTED",
                     transactionType: "TRANSFER",
-                    startTime: new Date().toISOString()
+                    startTime: new Date().toISOString(),
+                    suggestedAmount: suggestion
                 };
-                setLocalRejected(prev => [...prev, rejectedTx]);
+                setTransactions((prev) => [...prev, rejectedTx]);
             }
-            
-            setTimeout(() => setToast(null), 3000);
 
-            await fetchTransactions();
+            setTimeout(() => setToast(null), 6000);
+
+            if (response.data.safe) {
+                await fetchTransactions();
+            }
             await fetchAccounts();
 
             setFormData({
@@ -114,80 +102,36 @@ function Transactions() {
     };
 
     return (
-
         <div>
+            <h1 className="page-title">Transactions</h1>
 
-            <h1 className="page-title">
-                Transactions
-            </h1>
-
-            <form
-                className="transaction-form"
-                onSubmit={createTransaction}
-            >
-
+            <form className="transaction-form" onSubmit={createTransaction}>
                 <select
                     name="fromAccountId"
-                    value={
-                        formData.fromAccountId
-                    }
+                    value={formData.fromAccountId}
                     onChange={handleChange}
                     required
                 >
-
-                    <option value="">
-                        Sender
-                    </option>
-
-                    {
-                        accounts.map(
-                            (account) => (
-
-                            <option
-                                key={account.id}
-                                value={account.id}
-                            >
-
-                                {
-                                    `${account.accountHolder} (₹${account.allocated})`
-                                }
-
-                            </option>
-                        ))
-                    }
-
+                    <option value="">Sender</option>
+                    {accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                            {`${account.accountHolder} (₹${account.allocated})`}
+                        </option>
+                    ))}
                 </select>
 
                 <select
                     name="toAccountId"
-                    value={
-                        formData.toAccountId
-                    }
+                    value={formData.toAccountId}
                     onChange={handleChange}
                     required
                 >
-
-                    <option value="">
-                        Receiver
-                    </option>
-
-                    {
-                        accounts.map(
-                            (account) => (
-
-                            <option
-                                key={account.id}
-                                value={account.id}
-                            >
-
-                                {
-                                    `${account.accountHolder} (₹${account.allocated})`
-                                }
-
-                            </option>
-                        ))
-                    }
-
+                    <option value="">Receiver</option>
+                    {accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                            {`${account.accountHolder} (₹${account.allocated})`}
+                        </option>
+                    ))}
                 </select>
 
                 <input
@@ -199,15 +143,7 @@ function Transactions() {
                     required
                 />
 
-                <button
-                    className="primary-btn"
-                    type="submit"
-                >
-
-                    Transfer
-
-                </button>
-
+                <button className="primary-btn" type="submit">Transfer</button>
             </form>
 
             {toast && (
@@ -224,10 +160,28 @@ function Transactions() {
                 </div>
             )}
 
-            <TransactionTable
-                transactions={transactions}
-            />
+            {lastResult && !lastResult.safe && lastResult.suggestedAmount > 0 && (
+                <div className="panel" style={{ marginBottom: "20px", border: "1px solid #fbbf24" }}>
+                    <h3 style={{ color: "#fbbf24", marginBottom: "8px" }}>Rollback Suggestion (Bonus)</h3>
+                    <p style={{ color: "#cbd5e1" }}>
+                        The requested amount of ₹{lastResult.amount} would cause an unsafe state.
+                        The smallest safe modification is to reduce the transfer to{" "}
+                        <strong>₹{lastResult.suggestedAmount}</strong>{" "}
+                        (a reduction of ₹{lastResult.amount - lastResult.suggestedAmount}).
+                    </p>
+                </div>
+            )}
 
+            {lastResult && lastResult.safe && lastResult.safeSequence?.length > 0 && (
+                <div className="panel" style={{ marginBottom: "20px", border: "1px solid #4ade80" }}>
+                    <h3 style={{ color: "#4ade80", marginBottom: "8px" }}>Safe Sequence After Transfer</h3>
+                    <p style={{ color: "#cbd5e1" }}>
+                        {lastResult.safeSequence.map((p) => "P" + p).join(" → ")}
+                    </p>
+                </div>
+            )}
+
+            <TransactionTable transactions={transactions} />
         </div>
     );
 }
